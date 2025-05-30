@@ -1,0 +1,23 @@
+[project]
+name = "aoty"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+license = "MIT"
+license-file = "LICENSE"
+authors = [
+    { name = "Juan Sebastian Peña", email = "jspenaq@unal.edu.co" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
