@@ -1,36 +1,36 @@
-import re
 import asyncio
-from typing import List, Optional
-from math import ceil  # Import ceil for calculating total pages
+import re
+from math import ceil
 
-from aoty.scrapers.base import BaseScraper
-from aoty.exceptions import AlbumNotFoundError, ParsingError
-from aoty.models import Album, Review, Track, CriticReview, AlbumLink, UserRating
 from aoty.config import AOTY_BASE_URL
+from aoty.exceptions import (
+    AlbumNotFoundError,
+    NetworkError,
+    ParsingError,
+    ResourceNotFoundError,
+)
+from aoty.models import Album, AlbumLink, CriticReview, Review, Track, UserRating
+from aoty.scrapers.base import BaseScraper
 
 
 class AlbumScraper(BaseScraper):
-    """
-    Scraper for Album of the Year album pages.
+    """Scraper for Album of the Year album pages.
     """
 
-    async def scrape_album_by_id(self, album_id: str) -> Optional[Album]:
-        """
-        Scrapes album data using its ID.
+    async def scrape_album_by_id(self, album_id: str) -> Album | None:
+        """Scrapes album data using its ID.
         """
         url = f"{AOTY_BASE_URL}/album/{album_id}.php"
         return await self._scrape_album_page(url)
 
-    async def _scrape_album_page(self, url: str) -> Optional[Album]:
-        """
-        Internal method to scrape an album page URL.
-        """
+    async def _scrape_album_page(self, url: str) -> Album | None:
+        """Internal method to scrape an album page URL."""
         try:
             html = await self._get_html(url)
-        except Exception as e:
-            if "404" in str(e):  # Check for 404 specifically
-                raise AlbumNotFoundError(f"Album not found at URL: {url}") from e
-            raise  # Re-raise other exceptions
+        except ResourceNotFoundError as e:
+            raise AlbumNotFoundError(f"Album not found at URL: {url}") from e
+        except NetworkError as e:
+            raise ParsingError(f"Failed to fetch album page {url}: {e}") from e
 
         try:
             album_data: Album = {
@@ -38,12 +38,11 @@ class AlbumScraper(BaseScraper):
                 "artist": self._parse_text(html, 'div.artist span[itemprop="name"] a'),
                 "url": url,
                 "id": (
-                    int(re.search(r"/album/(\d+)", url).group(1))
+                    self._parse_int(re.search(r"/album/(\d+)", url).group(1))
                     if re.search(r"/album/(\d+)", url)
                     else None
                 ),
                 "genres": [],
-                # "description": self._parse_attribute(html, 'meta[name="description"]', 'content'),
                 "release_date": None,
                 "format": None,
                 "labels": [],
@@ -58,22 +57,18 @@ class AlbumScraper(BaseScraper):
                 srcset = cover_img.attributes.get("srcset")
                 if srcset:
                     # Take the last (presumably largest) URL from srcset
-                    album_data["cover_url"] = (
-                        srcset.split(",")[-1].strip().split(" ")[0]
-                    )
+                    album_data["cover_url"] = srcset.split(",")[-1].strip().split(" ")[0]
                 else:
                     album_data["cover_url"] = cover_img.attributes.get(
-                        "data-src"
+                        "data-src",
                     ) or cover_img.attributes.get("src")
 
             # Critic Score
             critic_score_link = html.css_first(
-                'div.albumCriticScore span[itemprop="ratingValue"] a'
+                'div.albumCriticScore span[itemprop="ratingValue"] a',
             )
             if critic_score_link:
-                album_data["critic_score"] = self._parse_float(
-                    critic_score_link, attribute="title"
-                )
+                album_data["critic_score"] = self._parse_float(critic_score_link, attribute="title")
 
             album_data["critic_review_count"] = self._parse_float(
                 html,
@@ -81,37 +76,31 @@ class AlbumScraper(BaseScraper):
                 default=None,
             )
 
-            critic_rank_text = self._parse_text(
-                html, "div.albumCriticScoreBox .text.gray"
-            )
+            critic_rank_text = self._parse_text(html, "div.albumCriticScoreBox .text.gray")
             if critic_rank_text:
                 match = re.search(r"#(\d+)\s*/\s*(\d+)", critic_rank_text)
                 if match:
-                    album_data["critic_rank_year"] = int(match.group(1))
-                    album_data["critic_rank_year_total"] = int(match.group(2))
+                    album_data["critic_rank_year"] = self._parse_int(match.group(1))
+                    album_data["critic_rank_year_total"] = self._parse_int(match.group(2))
 
             # User Score
             user_score_link = html.css_first("div.albumUserScore a")
             if user_score_link:
-                album_data["user_score"] = self._parse_float(
-                    user_score_link, attribute="title"
-                )
+                album_data["user_score"] = self._parse_float(user_score_link, attribute="title")
 
             user_rating_count_text = self._parse_text(
-                html, "div.albumUserScoreBox .text.numReviews strong"
+                html, "div.albumUserScoreBox .text.numReviews strong",
             )
             if user_rating_count_text:
-                album_data["user_rating_count"] = int(
-                    user_rating_count_text.replace(",", "")
+                album_data["user_rating_count"] = self._parse_int(
+                    user_rating_count_text.replace(",", ""),
                 )
 
-            user_rank_text = self._parse_text(
-                html, "div.albumUserScoreBox .text.gray strong a"
-            )
+            user_rank_text = self._parse_text(html, "div.albumUserScoreBox .text.gray strong a")
             if user_rank_text:
                 match = re.search(r"#(\d+)", user_rank_text)
                 if match:
-                    album_data["user_rank_year"] = int(match.group(1))
+                    album_data["user_rank_year"] = self._parse_int(match.group(1))
 
             # Details Section Parsing
             details_section = html.css_first("div.albumTopBox.info")
@@ -129,7 +118,7 @@ class AlbumScraper(BaseScraper):
                             .lower()
                         )
 
-                        # Get the full text of the detail row and remove the label text to get the value
+                        # Get the full text of the detail row
                         full_row_text = detail_row.text(strip=True)
                         value_text = full_row_text.replace(label_text_raw, "").strip()
 
@@ -181,8 +170,8 @@ class AlbumScraper(BaseScraper):
                             ]
 
             # Tracklist
-            tracklist: List[Track] = []
-            for i, row in enumerate(html.css("table.trackListTable tr")):
+            tracklist: list[Track] = []
+            for _, row in enumerate(html.css("table.trackListTable tr")):
                 track_number_node = row.css_first("td.trackNumber")
                 track_title_node = row.css_first("td.trackTitle a")
                 track_duration_node = row.css_first("td.trackTitle div.length")
@@ -190,22 +179,18 @@ class AlbumScraper(BaseScraper):
 
                 if track_number_node and track_title_node:
                     track: Track = {
-                        "number": int(track_number_node.text(strip=True)),
+                        "number": self._parse_int(track_number_node),
                         "title": track_title_node.text(strip=True),
                         "url": AOTY_BASE_URL + track_title_node.attributes.get("href"),
                         "duration": (
-                            track_duration_node.text(strip=True)
-                            if track_duration_node
-                            else None
+                            track_duration_node.text(strip=True) if track_duration_node else None
                         ),
                         "featured_artists": [],
                         "rating": None,
                         "rating_count": None,
                     }
 
-                    featured_artists_nodes = row.css(
-                        "td.trackTitle div.featuredArtists a"
-                    )
+                    featured_artists_nodes = row.css("td.trackTitle div.featuredArtists a")
                     if featured_artists_nodes:
                         track["featured_artists"] = [
                             {
@@ -216,27 +201,21 @@ class AlbumScraper(BaseScraper):
                         ]
 
                     if track_rating_node:
-                        track["rating"] = self._parse_float(
-                            track_rating_node, None, default=None
-                        )
+                        track["rating"] = self._parse_float(track_rating_node, None, default=None)
                         rating_count_title = track_rating_node.attributes.get("title")
                         if rating_count_title:
-                            count_match = re.search(
-                                r"(\d+)\s*Ratings", rating_count_title
-                            )
+                            count_match = re.search(r"(\d+)\s*Ratings", rating_count_title)
                             if count_match:
-                                track["rating_count"] = int(count_match.group(1))
+                                track["rating_count"] = self._parse_int(count_match.group(1))
                     tracklist.append(track)
             album_data["tracklist"] = tracklist
 
             total_length_text = self._parse_text(html, "div.totalLength")
             if total_length_text:
-                album_data["total_length"] = total_length_text.replace(
-                    "Total Length: ", ""
-                ).strip()
+                album_data["total_length"] = total_length_text.replace("Total Length: ", "").strip()
 
             # Third-party links
-            links: List[AlbumLink] = []
+            links: list[AlbumLink] = []
             for link_node in html.css("div.buyButtons a"):
                 link_name = link_node.attributes.get("title")
                 link_url = link_node.attributes.get("href")
@@ -245,7 +224,7 @@ class AlbumScraper(BaseScraper):
             album_data["links"] = links
 
             # Critic Reviews
-            critic_reviews: List[CriticReview] = []
+            critic_reviews: list[CriticReview] = []
             for review_row in html.css("div#criticReviewContainer div.albumReviewRow"):
                 publication_node = review_row.css_first("div.publication a")
                 author_node = review_row.css_first("div.author a")
@@ -257,11 +236,8 @@ class AlbumScraper(BaseScraper):
                 if publication_node and score_node:
                     review: CriticReview = {
                         "publication_name": publication_node.text(strip=True),
-                        "publication_url": AOTY_BASE_URL
-                        + publication_node.attributes.get("href"),
-                        "author_name": (
-                            author_node.text(strip=True) if author_node else None
-                        ),
+                        "publication_url": AOTY_BASE_URL + publication_node.attributes.get("href"),
+                        "author_name": (author_node.text(strip=True) if author_node else None),
                         "author_url": (
                             AOTY_BASE_URL + author_node.attributes.get("href")
                             if author_node
@@ -270,17 +246,15 @@ class AlbumScraper(BaseScraper):
                         "score": float(score_node.text(strip=True)),
                         "text": text_node.text(strip=True) if text_node else None,
                         "url": link_node.attributes.get("href") if link_node else None,
-                        "date": (
-                            date_node.attributes.get("title") if date_node else None
-                        ),
+                        "date": (date_node.attributes.get("title") if date_node else None),
                     }
                     critic_reviews.append(review)
             album_data["critic_reviews"] = critic_reviews
 
             # User Reviews (Popular and Recent)
-            popular_user_reviews: List[Review] = []
+            popular_user_reviews: list[Review] = []
             for review_row in html.css(
-                'section#users:has(h2 a[href*="popular"]) div.albumReviewRow'
+                'section#users:has(h2 a[href*="popular"]) div.albumReviewRow',
             ):
                 username_node = review_row.css_first("div.userReviewName a")
                 rating_node = review_row.css_first("div.ratingBlock div.rating")
@@ -292,29 +266,27 @@ class AlbumScraper(BaseScraper):
                 if username_node and rating_node:
                     review: Review = {
                         "username": username_node.text(strip=True),
-                        "user_url": AOTY_BASE_URL
-                        + username_node.attributes.get("href"),
+                        "user_url": AOTY_BASE_URL + username_node.attributes.get("href"),
                         "rating": float(rating_node.text(strip=True)),
                         "text": text_node.text(strip=True) if text_node else None,
                         "date": date_node.text(strip=True) if date_node else None,
                         "likes": (
-                            int(likes_node.text(strip=True))
+                            self._parse_int(likes_node)
                             if likes_node and likes_node.text(strip=True).isdigit()
                             else 0
                         ),
                         "comment_count": (
-                            int(comment_count_node.text(strip=True))
-                            if comment_count_node
-                            and comment_count_node.text(strip=True).isdigit()
+                            self._parse_int(comment_count_node)
+                            if comment_count_node and comment_count_node.text(strip=True).isdigit()
                             else 0
                         ),
                     }
                     popular_user_reviews.append(review)
             album_data["popular_user_reviews"] = popular_user_reviews
 
-            recent_user_reviews: List[Review] = []
+            recent_user_reviews: list[Review] = []
             for review_row in html.css(
-                'section#users:has(h2 a[href*="recent"]) div.albumReviewRow'
+                'section#users:has(h2 a[href*="recent"]) div.albumReviewRow',
             ):
                 username_node = review_row.css_first("div.userReviewName a")
                 rating_node = review_row.css_first("div.ratingBlock div.rating")
@@ -326,20 +298,18 @@ class AlbumScraper(BaseScraper):
                 if username_node and rating_node:
                     review: Review = {
                         "username": username_node.text(strip=True),
-                        "user_url": AOTY_BASE_URL
-                        + username_node.attributes.get("href"),
+                        "user_url": AOTY_BASE_URL + username_node.attributes.get("href"),
                         "rating": float(rating_node.text(strip=True)),
                         "text": text_node.text(strip=True) if text_node else None,
                         "date": date_node.text(strip=True) if date_node else None,
                         "likes": (
-                            int(likes_node.text(strip=True))
+                            self._parse_int(likes_node)
                             if likes_node and likes_node.text(strip=True).isdigit()
                             else 0
                         ),
                         "comment_count": (
-                            int(comment_count_node.text(strip=True))
-                            if comment_count_node
-                            and comment_count_node.text(strip=True).isdigit()
+                            self._parse_int(comment_count_node)
+                            if comment_count_node and comment_count_node.text(strip=True).isdigit()
                             else 0
                         ),
                     }
@@ -348,9 +318,7 @@ class AlbumScraper(BaseScraper):
 
             # Similar Albums
             similar_albums_list = []
-            for album_block in html.css(
-                'div.section:has(h2 a[href*="similar"]) .albumBlock.small'
-            ):
+            for album_block in html.css('div.section:has(h2 a[href*="similar"]) .albumBlock.small'):
                 title_node = album_block.css_first("a div.albumTitle")
                 artist_node = album_block.css_first("a div.artistTitle")
                 link_node = album_block.css_first("a")
@@ -360,15 +328,13 @@ class AlbumScraper(BaseScraper):
                             "title": title_node.text(strip=True),
                             "artist": artist_node.text(strip=True),
                             "url": AOTY_BASE_URL + link_node.attributes.get("href"),
-                        }
+                        },
                     )
             album_data["similar_albums"] = similar_albums_list
 
             # More by Artist
             more_by_artist_list = []
-            for album_block in html.css(
-                'div.section:has(h2 a[href*="artist"]) .albumBlock.small'
-            ):
+            for album_block in html.css('div.section:has(h2 a[href*="artist"]) .albumBlock.small'):
                 title_node = album_block.css_first("a div.albumTitle")
                 year_node = album_block.css_first("div.type")
                 link_node = album_block.css_first("a")
@@ -377,12 +343,12 @@ class AlbumScraper(BaseScraper):
                         {
                             "title": title_node.text(strip=True),
                             "year": (
-                                int(year_node.text(strip=True))
-                                if year_node.text(strip=True).isdigit()
+                                self._parse_int(year_node)
+                                if year_node and year_node.text(strip=True).isdigit()
                                 else None
                             ),
                             "url": AOTY_BASE_URL + link_node.attributes.get("href"),
-                        }
+                        },
                     )
             album_data["more_by_artist"] = more_by_artist_list
 
@@ -393,7 +359,7 @@ class AlbumScraper(BaseScraper):
                     {
                         "name": contributor_node.text(strip=True),
                         "url": AOTY_BASE_URL + contributor_node.attributes.get("href"),
-                    }
+                    },
                 )
             album_data["contributions_by"] = contributions_by_list
 
@@ -402,9 +368,8 @@ class AlbumScraper(BaseScraper):
         except Exception as e:
             raise ParsingError(f"Failed to parse album data from {url}: {e}") from e
 
-    async def scrape_user_reviews_ratings(self, album_id: str) -> List[UserRating]:
-        """
-        Scrapes all user ratings (without review text) for a given album ID across all pages.
+    async def scrape_user_reviews_ratings(self, album_id: str) -> list[UserRating]:
+        """Scrapes all user ratings (without review text) for a given album ID across all pages.
         This function specifically targets pages like
         'https://www.albumoftheyear.org/album/{album_id}/user-reviews/?type=ratings'.
 
@@ -417,38 +382,36 @@ class AlbumScraper(BaseScraper):
         Raises:
             AlbumNotFoundError: If the album page for ratings is not found (404).
             ParsingError: If there's an issue parsing the HTML content.
+
         """
+
         base_url = f"{AOTY_BASE_URL}/album/{album_id}/user-reviews/?type=ratings"
-        all_user_ratings: List[UserRating] = []
+        all_user_ratings: list[UserRating] = []
 
         try:
             # Fetch the first page to determine total number of reviews/pages
             first_page_html = await self._get_html(base_url)
-        except Exception as e:
-            if "404" in str(e):
-                raise AlbumNotFoundError(
-                    f"User ratings page not found for album ID {album_id} at URL: {base_url}"
-                ) from e
+        except ResourceNotFoundError as e:
+            raise AlbumNotFoundError(
+                f"User ratings page not found for album ID {album_id} at URL: {base_url}",
+            ) from e
+        except NetworkError as e:
             raise ParsingError(
-                f"Failed to fetch initial user ratings page for album ID {album_id}: {e}"
+                f"Failed to fetch initial user ratings page for album ID {album_id}: {e}",
             ) from e
 
         try:
             # Extract total number of reviews to calculate total pages
-            total_reviews_text = self._parse_text(
-                first_page_html, "div.userReviewCounter"
-            )
+            total_reviews_text = self._parse_text(first_page_html, "div.userReviewCounter")
             total_reviews = 0
             if total_reviews_text:
                 match = re.search(r"of (\d+) user reviews", total_reviews_text)
                 if match:
-                    total_reviews = int(match.group(1))
+                    total_reviews = self._parse_int(match.group(1))
 
             # Album of the Year displays 80 ratings per page
             reviews_per_page = 80
-            total_pages = (
-                ceil(total_reviews / reviews_per_page) if total_reviews > 0 else 1
-            )
+            total_pages = ceil(total_reviews / reviews_per_page) if total_reviews > 0 else 1
 
             # Prepare URLs for all pages
             urls_to_scrape = [
@@ -457,9 +420,7 @@ class AlbumScraper(BaseScraper):
             ]
 
             # Fetch all pages concurrently
-            html_pages = await asyncio.gather(
-                *[self._get_html(url) for url in urls_to_scrape]
-            )
+            html_pages = await asyncio.gather(*[self._get_html(url) for url in urls_to_scrape])
 
             # Process each page and collect ratings
             for html in html_pages:
@@ -470,9 +431,7 @@ class AlbumScraper(BaseScraper):
 
                     if username_node and rating_node and date_node:
                         rating_data: UserRating = {
-                            "username": self._parse_attribute(
-                                username_node, None, "title"
-                            ),
+                            "username": self._parse_attribute(username_node, None, "title"),
                             "user_url": AOTY_BASE_URL
                             + self._parse_attribute(username_node, None, "href"),
                             "rating": self._parse_float(rating_node),
@@ -481,6 +440,4 @@ class AlbumScraper(BaseScraper):
                         all_user_ratings.append(rating_data)
             return all_user_ratings
         except Exception as e:
-            raise ParsingError(
-                f"Failed to parse user ratings from album ID {album_id}: {e}"
-            ) from e
+            raise ParsingError(f"Failed to parse user ratings from album ID {album_id}: {e}") from e
