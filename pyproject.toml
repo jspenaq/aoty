@@ -35,3 +35,29 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle
+    "F",  # Pyflakes
+    "I",  # isort
+    "N",  # pep8-naming
+    "Q",  # flake8-quotes
+    "S",  # flake8-bandit
+    "B",  # flake8-bugbear
+    "UP",  # pyupgrade
+    "TC",  # flake8-type-checking
+    "TD",  # flake8-todos
+    "C4",  # flake8-comprehensions
+    "ISC", # flake8-implicit-str-concat
+    "ANN",  # flake8-annotations
+    "SIM",  # flake8-simplify
+    "RET",  # flake8-return
+    "COM",  # flake8-commas
+    "ICN",  # flake8-import-conventions
+    "TID",  # flake8-tidy-imports
+    "PTH",  # flake8-use-pathlib
+]
