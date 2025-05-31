@@ -1,10 +1,11 @@
 import re
 import asyncio
 from typing import List, Optional
+from math import ceil  # Import ceil for calculating total pages
 
 from aoty.scrapers.base import BaseScraper
 from aoty.exceptions import AlbumNotFoundError, ParsingError
-from aoty.models import Album, Review, Track, CriticReview, AlbumLink
+from aoty.models import Album, Review, Track, CriticReview, AlbumLink, UserRating
 from aoty.config import AOTY_BASE_URL
 
 
@@ -400,3 +401,86 @@ class AlbumScraper(BaseScraper):
 
         except Exception as e:
             raise ParsingError(f"Failed to parse album data from {url}: {e}") from e
+
+    async def scrape_user_reviews_ratings(self, album_id: str) -> List[UserRating]:
+        """
+        Scrapes all user ratings (without review text) for a given album ID across all pages.
+        This function specifically targets pages like
+        'https://www.albumoftheyear.org/album/{album_id}/user-reviews/?type=ratings'.
+
+        Args:
+            album_id (str): The ID of the album to scrape ratings for.
+
+        Returns:
+            List[UserRating]: A list of dictionaries, each representing a user rating.
+
+        Raises:
+            AlbumNotFoundError: If the album page for ratings is not found (404).
+            ParsingError: If there's an issue parsing the HTML content.
+        """
+        base_url = f"{AOTY_BASE_URL}/album/{album_id}/user-reviews/?type=ratings"
+        all_user_ratings: List[UserRating] = []
+
+        try:
+            # Fetch the first page to determine total number of reviews/pages
+            first_page_html = await self._get_html(base_url)
+        except Exception as e:
+            if "404" in str(e):
+                raise AlbumNotFoundError(
+                    f"User ratings page not found for album ID {album_id} at URL: {base_url}"
+                ) from e
+            raise ParsingError(
+                f"Failed to fetch initial user ratings page for album ID {album_id}: {e}"
+            ) from e
+
+        try:
+            # Extract total number of reviews to calculate total pages
+            total_reviews_text = self._parse_text(
+                first_page_html, "div.userReviewCounter"
+            )
+            total_reviews = 0
+            if total_reviews_text:
+                match = re.search(r"of (\d+) user reviews", total_reviews_text)
+                if match:
+                    total_reviews = int(match.group(1))
+
+            # Album of the Year displays 80 ratings per page
+            reviews_per_page = 80
+            total_pages = (
+                ceil(total_reviews / reviews_per_page) if total_reviews > 0 else 1
+            )
+
+            # Prepare URLs for all pages
+            urls_to_scrape = [
+                f"{AOTY_BASE_URL}/album/{album_id}/user-reviews/?p={page_num}&type=ratings"
+                for page_num in range(1, total_pages + 1)
+            ]
+
+            # Fetch all pages concurrently
+            html_pages = await asyncio.gather(
+                *[self._get_html(url) for url in urls_to_scrape]
+            )
+
+            # Process each page and collect ratings
+            for html in html_pages:
+                for rating_block in html.css("div.userRatingBlock"):
+                    username_node = rating_block.css_first("div.userName a")
+                    rating_node = rating_block.css_first("div.ratingBlock div.rating")
+                    date_node = rating_block.css_first("div.date")
+
+                    if username_node and rating_node and date_node:
+                        rating_data: UserRating = {
+                            "username": self._parse_attribute(
+                                username_node, None, "title"
+                            ),
+                            "user_url": AOTY_BASE_URL
+                            + self._parse_attribute(username_node, None, "href"),
+                            "rating": self._parse_float(rating_node),
+                            "date": self._parse_attribute(date_node, None, "title"),
+                        }
+                        all_user_ratings.append(rating_data)
+            return all_user_ratings
+        except Exception as e:
+            raise ParsingError(
+                f"Failed to parse user ratings from album ID {album_id}: {e}"
+            ) from e

@@ -53,6 +53,15 @@ class Review(TypedDict):
     comment_count: Optional[int]
 
 
+class UserRating(TypedDict):
+    """Represents a user's rating for an album (without a full review text)."""
+
+    username: str
+    user_url: Optional[str]
+    rating: float
+    date: Optional[str]
+
+
 class SongDetails(TypedDict):
     """Represents a detailed view of a song from its dedicated page."""
 
