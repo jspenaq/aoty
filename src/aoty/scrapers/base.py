@@ -75,7 +75,8 @@ class BaseScraper:
     def _parse_list_of_texts(self, node, selector: str) -> list[str]:
         """Helper to safely extract a list of texts from multiple elements."""
         elements = node.css(selector)
-        return [el.text(strip=True) for el in elements if el.text(strip=True)]
+        # Changed: Removed the conditional filter to include empty strings after stripping
+        return [el.text(strip=True) for el in elements]
 
     def _parse_attribute(
         self,
