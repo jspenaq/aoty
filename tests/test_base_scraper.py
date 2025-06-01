@@ -3,7 +3,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 from selectolax.parser import HTMLParser
 
-from src.aoty.scrapers.base import BaseScraper
+from aoty.scrapers.base import BaseScraper
 from aoty.exceptions import ResourceNotFoundError, NetworkError, AOTYError
 
 

@@ -1,7 +1,7 @@
 import pytest
 from datetime import date
 
-from src.aoty.utils import parse_release_date
+from aoty.utils import parse_release_date
 
 
 @pytest.mark.parametrize(

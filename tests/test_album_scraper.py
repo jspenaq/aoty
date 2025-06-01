@@ -8,7 +8,7 @@ from selectolax.parser import HTMLParser
 
 from aoty.config import AOTY_BASE_URL
 from aoty.exceptions import AlbumNotFoundError, NetworkError, ParsingError, ResourceNotFoundError
-from src.aoty.scrapers.album import AlbumScraper
+from aoty.scrapers.album import AlbumScraper
 
 
 @pytest.fixture
