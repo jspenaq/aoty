@@ -5,7 +5,7 @@ from typing import TypeVar
 from rnet import Client, Impersonate, Response
 from selectolax.parser import HTMLParser, Node
 
-from aoty.config import REQUEST_TIMEOUT_SECONDS
+from aoty.config import AOTY_BASE_URL, REQUEST_TIMEOUT_SECONDS
 from aoty.exceptions import NetworkError, ResourceNotFoundError
 
 # Define a TypeVar for numeric types
@@ -22,7 +22,8 @@ class BaseScraper:
     def __init__(self) -> None:
         """Initialize the BaseScraper with a configured HTTP client."""
         self._client: Client = Client(
-            impersonate=Impersonate.Firefox136, timeout=REQUEST_TIMEOUT_SECONDS,
+            impersonate=Impersonate.Firefox136,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
 
     async def _get_html(self, url: str) -> HTMLParser:
@@ -59,19 +60,22 @@ class BaseScraper:
 
     def _parse_number(
         self,
-        node: Node,
+        node: Node | str,  # Updated type hint to accept Node or str
         target_type: type[_NumberType],
         selector: str | None = None,
         attribute: str | None = None,
         default: _NumberType | None = None,
     ) -> _NumberType | None:
         """Safely extract and convert text or attribute to a numeric type (int or float).
+        This method is primarily designed to parse numbers from HTML nodes.
+        If a string is passed directly as 'node', it is assumed to be the value itself.
 
         Args:
-            node (Node): The HTML node to search within.
+            node (Node | str): The HTML node to search within, or a string containing the number.
             target_type (type[_NumberType]): The desired numeric type (int or float).
             selector (str | None): CSS selector for the element containing the number.
                                    If None, the number is extracted directly from the `node`.
+                                   This parameter is typically ignored if `node` is a string.
             attribute (str | None): The attribute name to extract the number from.
                                     If None, the text content of the element is used.
             default (_NumberType | None): Default value to return.
@@ -79,12 +83,17 @@ class BaseScraper:
         Returns:
             _NumberType | None: The parsed number, or the default value if parsing fails.
         """
-        element = node.css_first(selector) if selector else node
+        value_str: str | None = None
 
-        if not element:
-            return default
-
-        value_str = element.attributes.get(attribute) if attribute else element.text(strip=True)
+        if isinstance(node, str):
+            # If node is already a string, it is assumed to be the value itself.
+            # Selector and attribute are not applicable in this case.
+            value_str = node
+        else:  # node is a Node
+            element = node.css_first(selector) if selector else node
+            if not element:
+                return default
+            value_str = element.attributes.get(attribute) if attribute else element.text(strip=True)
 
         try:
             return target_type(value_str) if value_str is not None else default
@@ -130,6 +139,12 @@ class BaseScraper:
 
         element = node.css_first(selector) if selector else node
         return element.attributes.get(attribute, default) if element else default
+
+    def _build_full_url(self, relative_path: str | None) -> str | None:
+        """Builds a full URL from a relative path, prepending AOTY_BASE_URL."""
+        if relative_path:
+            return AOTY_BASE_URL + relative_path
+        return None
 
     async def close(self) -> None:
         """Close the underlying HTTP client session."""
