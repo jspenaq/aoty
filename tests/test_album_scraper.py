@@ -1,7 +1,5 @@
-import asyncio
-import re
-from unittest.mock import AsyncMock, MagicMock
-from datetime import date # Import date
+from datetime import date  # Import date
+from unittest.mock import AsyncMock
 
 import pytest
 from selectolax.parser import HTMLParser
@@ -32,7 +30,7 @@ def create_mock_html_response(html_content: str) -> HTMLParser:
 async def test_scrape_album_by_id_success(album_scraper):
     """Test successful scraping of a full album page."""
     album_id = "569129-rm-indigo"  # Example ID that matches regex for ID extraction
-    mock_html = f"""
+    mock_html = """
     <html><body>
         <h1 class="albumTitle"><span itemprop="name">Indigo</span></h1>
         <div class="artist"><span itemprop="name"><a href="/artist/123-rm.php">RM</a></span></div>
@@ -74,20 +72,20 @@ async def test_scrape_album_by_id_success(album_scraper):
     assert album["user_score"] == 8.2
     assert album["user_rating_count"] == 5432
     assert album["user_rank_year"] == 25
-    assert album["release_date"] == date(2022, 12, 2) # Updated to datetime.date object
+    assert album["release_date"] == date(2022, 12, 2)  # Updated to datetime.date object
     assert album["format"] == "LP"
     assert isinstance(album["labels"], list)
     assert "Pop Rap" in album["genres"]
-    # assert album["producers"] == [] 
-    # assert album["writers"] == [] 
-    assert album["tracklist"] == [] 
-    assert album["total_length"] == None  # Now this assertion should pass
-    assert album["links"] == [] 
-    assert album["critic_reviews"] == [] 
-    assert album["popular_user_reviews"] == [] 
-    assert album["recent_user_reviews"] == [] 
-    assert album["similar_albums"] == [] 
-    assert album["more_by_artist"] == [] 
+    # assert album["producers"] == []
+    # assert album["writers"] == []
+    assert album["tracklist"] == []
+    assert album["total_length"] == None
+    assert album["links"] == []
+    assert album["critic_reviews"] == []
+    assert album["popular_user_reviews"] == []
+    assert album["recent_user_reviews"] == []
+    assert album["similar_albums"] == []
+    assert album["more_by_artist"] == []
     assert album["credits"] == []
 
 
@@ -110,10 +108,12 @@ async def test_scrape_album_by_id_network_error(album_scraper):
 
     with pytest.raises(ParsingError) as excinfo:
         await album_scraper.scrape_album_by_id(album_id)
-    assert f"Failed to fetch album page {AOTY_BASE_URL}/album/{album_id}.php: Connection failed" in str(
-        excinfo.value,
+    assert (
+        f"Failed to fetch album page {AOTY_BASE_URL}/album/{album_id}.php: Connection failed"
+        in str(
+            excinfo.value,
+        )
     )
-
 
 
 # --- Test scrape_user_reviews_ratings ---
@@ -161,7 +161,7 @@ async def test_scrape_user_reviews_ratings_success_multiple_pages(album_scraper)
 
     # Configure _get_html to return different content for different URLs
     def get_html_side_effect(url):
-        if url == base_ratings_url: # This now matches the p=1 URL
+        if url == base_ratings_url:  # This now matches the p=1 URL
             return create_mock_html_response(mock_first_page_html)
         if url == f"{AOTY_BASE_URL}/album/{album_id}/user-reviews/?p=2&type=ratings":
             return create_mock_html_response(mock_second_page_html)
@@ -176,7 +176,7 @@ async def test_scrape_user_reviews_ratings_success_multiple_pages(album_scraper)
     album_scraper._get_html.assert_any_call(
         f"{AOTY_BASE_URL}/album/{album_id}/user-reviews/?p=2&type=ratings",
     )
-    assert album_scraper._get_html.call_count == 2 # Now expects 2 calls for 2 pages
+    assert album_scraper._get_html.call_count == 2  # Now expects 2 calls for 2 pages
 
     assert len(ratings) == 4
     assert ratings[0] == {
@@ -241,7 +241,9 @@ async def test_scrape_user_reviews_ratings_network_error(album_scraper):
 
     with pytest.raises(ParsingError) as excinfo:
         await album_scraper.scrape_user_reviews_ratings(album_id)
-    assert f"Failed to fetch initial user ratings page for album ID {album_id}" in str(excinfo.value)
+    assert f"Failed to fetch initial user ratings page for album ID {album_id}" in str(
+        excinfo.value,
+    )
 
 
 @pytest.mark.asyncio
@@ -272,13 +274,15 @@ async def test_scrape_user_reviews_ratings_parsing_error(album_scraper):
     """
 
     # Configure _get_html to return valid HTML for the first page, then malformed for others
-    base_ratings_url = f"{AOTY_BASE_URL}/album/{album_id}/user-reviews/?p=1&type=ratings" # Updated to p=1
+    base_ratings_url = (
+        f"{AOTY_BASE_URL}/album/{album_id}/user-reviews/?p=1&type=ratings"  # Updated to p=1
+    )
 
     def get_html_side_effect(url):
         if url == base_ratings_url:
             return create_mock_html_response(mock_first_page_html)
         # Any other URL (e.g., page 2, page 3, etc.) should return malformed HTML
-        elif f"{AOTY_BASE_URL}/album/{album_id}/user-reviews/?p=" in url:
+        if f"{AOTY_BASE_URL}/album/{album_id}/user-reviews/?p=" in url:
             return create_mock_html_response(mock_malformed_html)
         raise ValueError(f"Unexpected URL: {url}")
 
@@ -287,4 +291,3 @@ async def test_scrape_user_reviews_ratings_parsing_error(album_scraper):
     with pytest.raises(ParsingError) as excinfo:
         await album_scraper.scrape_user_reviews_ratings(album_id)
     assert f"Failed to parse user ratings from album ID {album_id}" in str(excinfo.value)
-

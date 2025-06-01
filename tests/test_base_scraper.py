@@ -1,10 +1,10 @@
-import pytest
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from selectolax.parser import HTMLParser
 
+from aoty.exceptions import NetworkError, ResourceNotFoundError
 from aoty.scrapers.base import BaseScraper
-from aoty.exceptions import ResourceNotFoundError, NetworkError, AOTYError
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ async def test_get_html_success(base_scraper):
     mock_response.ok = True
     mock_response.status = 200
     mock_response.text = AsyncMock(
-        return_value="<html><body><h1>Test</h1></body></html>"
+        return_value="<html><body><h1>Test</h1></body></html>",
     )
     base_scraper._client.get.return_value = mock_response
 
@@ -45,7 +45,7 @@ async def test_get_html_404_error(base_scraper):
     with pytest.raises(ResourceNotFoundError) as excinfo:
         await base_scraper._get_html("http://example.com/nonexistent")
     assert "Resource not found at http://example.com/nonexistent (Status: 404)" in str(
-        excinfo.value
+        excinfo.value,
     )
 
 
@@ -61,7 +61,7 @@ async def test_get_html_other_http_error(base_scraper):
     with pytest.raises(NetworkError) as excinfo:
         await base_scraper._get_html("http://example.com/error")
     assert "Failed to fetch http://example.com/error (Status: 500)" in str(
-        excinfo.value
+        excinfo.value,
     )
 
 
@@ -72,12 +72,13 @@ async def test_get_html_connection_error(base_scraper):
 
     with pytest.raises(NetworkError) as excinfo:
         await base_scraper._get_html("http://example.com/bad-connection")
-    assert (
-        "Network error fetching http://example.com/bad-connection: Failed to connect"
-        in str(excinfo.value)
+    assert "Network error fetching http://example.com/bad-connection: Failed to connect" in str(
+        excinfo.value,
     )
 
+
 import pytest
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
@@ -101,7 +102,7 @@ async def test_post_html_success(base_scraper, data_type, test_data, expected_da
     mock_response.ok = True
     mock_response.status = 200
     mock_response.text = AsyncMock(
-        return_value="<html><body><h1>Test</h1></body></html>"
+        return_value="<html><body><h1>Test</h1></body></html>",
     )
     base_scraper._client.post.return_value = mock_response
 
@@ -109,13 +110,17 @@ async def test_post_html_success(base_scraper, data_type, test_data, expected_da
 
     if data_type == "form_data":
         html_parser = await base_scraper._post_html(
-            "http://example.com/post", form_data=test_data, headers=test_headers
+            "http://example.com/post",
+            form_data=test_data,
+            headers=test_headers,
         )
         expected_call_data = list(test_data.items())
         expected_arg = "form"
     elif data_type == "json_data":
         html_parser = await base_scraper._post_html(
-            "http://example.com/post", json_data=test_data, headers=test_headers
+            "http://example.com/post",
+            json_data=test_data,
+            headers=test_headers,
         )
         expected_call_data = test_data
         expected_arg = "json"
@@ -125,7 +130,9 @@ async def test_post_html_success(base_scraper, data_type, test_data, expected_da
     assert isinstance(html_parser, HTMLParser)
     assert html_parser.css_first("h1").text(strip=True) == "Test"
     base_scraper._client.post.assert_awaited_once_with(
-        "http://example.com/post", headers=test_headers, **{expected_arg: expected_call_data}
+        "http://example.com/post",
+        headers=test_headers,
+        **{expected_arg: expected_call_data},
     )
 
 
@@ -141,7 +148,7 @@ async def test_post_html_404_error(base_scraper):
     with pytest.raises(ResourceNotFoundError) as excinfo:
         await base_scraper._post_html("http://example.com/nonexistent")
     assert "Resource not found at http://example.com/nonexistent (Status: 404)" in str(
-        excinfo.value
+        excinfo.value,
     )
 
 
@@ -157,7 +164,7 @@ async def test_post_html_other_http_error(base_scraper):
     with pytest.raises(NetworkError) as excinfo:
         await base_scraper._post_html("http://example.com/error")
     assert "Failed to post to http://example.com/error (Status: 500)" in str(
-        excinfo.value
+        excinfo.value,
     )
 
 
@@ -168,9 +175,8 @@ async def test_post_html_connection_error(base_scraper):
 
     with pytest.raises(NetworkError) as excinfo:
         await base_scraper._post_html("http://example.com/bad-connection")
-    assert (
-        "Network error posting to http://example.com/bad-connection: Failed to connect"
-        in str(excinfo.value)
+    assert "Network error posting to http://example.com/bad-connection: Failed to connect" in str(
+        excinfo.value,
     )
 
 

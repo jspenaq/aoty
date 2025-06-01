@@ -1,11 +1,11 @@
-import asyncio
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
+from selectolax.parser import HTMLParser
 
 from aoty.config import AOTY_BASE_URL
 from aoty.exceptions import NetworkError, ParsingError, ResourceNotFoundError
 from aoty.scrapers.news import NewsScraper
-from selectolax.parser import HTMLParser
 
 
 @pytest.fixture
@@ -79,7 +79,7 @@ async def test_scrape_news_articles_pagination(news_scraper):
     async def get_html_side_effect(url):
         if url == f"{AOTY_BASE_URL}/l/newsworthy/":
             return create_mock_html_response(mock_html_page1)
-        elif url == f"{AOTY_BASE_URL}/l/newsworthy/2/":
+        if url == f"{AOTY_BASE_URL}/l/newsworthy/2/":
             return create_mock_html_response(mock_html_page2)
         return None
 
@@ -115,7 +115,9 @@ async def test_scrape_news_articles_resource_not_found(news_scraper):
 
     with pytest.raises(ResourceNotFoundError) as excinfo:
         await news_scraper.scrape_news_articles()
-    assert f"Resource not found while scraping news page 1 ({AOTY_BASE_URL}/l/newsworthy/)" in str(excinfo.value)
+    assert f"Resource not found while scraping news page 1 ({AOTY_BASE_URL}/l/newsworthy/)" in str(
+        excinfo.value,
+    )
 
 
 @pytest.mark.asyncio
@@ -125,8 +127,11 @@ async def test_scrape_news_articles_network_error(news_scraper):
 
     with pytest.raises(NetworkError) as excinfo:
         await news_scraper.scrape_news_articles()
-    assert f"Network error while scraping news page 1 ({AOTY_BASE_URL}/l/newsworthy/): Connection failed" in str(
-        excinfo.value,
+    assert (
+        f"Network error while scraping news page 1 ({AOTY_BASE_URL}/l/newsworthy/): Connection failed"
+        in str(
+            excinfo.value,
+        )
     )
 
 
@@ -137,6 +142,9 @@ async def test_scrape_news_articles_parsing_error(news_scraper):
 
     with pytest.raises(ParsingError) as excinfo:
         await news_scraper.scrape_news_articles()
-    assert f"Parsing error while scraping news page 1 ({AOTY_BASE_URL}/l/newsworthy/): Malformed HTML" in str(
-        excinfo.value,
+    assert (
+        f"Parsing error while scraping news page 1 ({AOTY_BASE_URL}/l/newsworthy/): Malformed HTML"
+        in str(
+            excinfo.value,
+        )
     )

@@ -1,5 +1,6 @@
-import pytest
 from datetime import date
+
+import pytest
 
 from aoty.utils import parse_release_date
 
@@ -44,4 +45,3 @@ def test_parse_release_date_invalid_input(date_str):
 def test_parse_release_date_none_input():
     """Test parse_release_date with None input."""
     assert parse_release_date(None) is None
-
