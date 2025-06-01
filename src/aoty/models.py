@@ -100,8 +100,8 @@ class Album(TypedDict):
     format: str | None
     labels: list[dict[str, str]] | None  # [{"name": "...", "url": "..."}]
     genres: list[str]
-    producers: list[dict[str, str]] | None  # [{"name": "...", "url": "..."}]
-    writers: list[dict[str, str]] | None  # [{"name": "...", "url": "..."}]
+    # producers: list[dict[str, str]] | None  # [{"name": "...", "url": "..."}]
+    # writers: list[dict[str, str]] | None  # [{"name": "...", "url": "..."}]
     credits: list[AlbumCredit] | None
     tracklist: list[Track] | None
     total_length: str | None
@@ -111,7 +111,6 @@ class Album(TypedDict):
     critic_reviews: list[CriticReview] | None
     popular_user_reviews: list[Review] | None
     recent_user_reviews: list[Review] | None
-    contributions_by: list[dict[str, str]] | None  # [{"name": "...", "url": "..."}]
     url: str
     id: int | None  # Can be derived from URL
 

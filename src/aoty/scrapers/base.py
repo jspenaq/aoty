@@ -53,6 +53,51 @@ class BaseScraper:
         except Exception as e:  # Catch other exceptions (e.g., ConnectionError)
             raise NetworkError(f"Network error fetching {url}: {e}") from e
 
+    async def _post_html(
+        self,
+        url: str,
+        form_data: dict | None = None,
+        json_data: dict | None = None,
+        headers: dict | None = None,
+    ) -> HTMLParser:
+        """Post data to a given URL and get HTML content.
+
+        Args:
+            url (str): The full URL to post to.
+            form_data (dict | None): Dict of form data to send (application/x-www-form-urlencoded).
+            json_data (dict | None): Dict of JSON data to send (application/json).
+            headers (dict | None): Dict of HTTP headers to send.
+
+        Returns:
+            HTMLParser: Parsed HTML content.
+
+        Raises:
+            ValueError: If both form_data and json_data are provided.
+            ResourceNotFoundError: If the resource is not found (404 status).
+            NetworkError: For other HTTP errors, connection issues, or unexpected responses.
+        """
+        if form_data is not None and json_data is not None:
+            raise ValueError("Cannot provide both 'form_data' and 'json_data'.")
+
+        post_kwargs = {"headers": headers}
+        if form_data is not None:
+            post_kwargs["form"] = list(form_data.items())
+        elif json_data is not None:
+            post_kwargs["json"] = json_data
+
+        try:
+            response: Response = await self._client.post(url, **post_kwargs)
+            if response.status == 404:
+                raise ResourceNotFoundError(f"Resource not found at {url} (Status: 404)")
+            if not response.ok:
+                raise NetworkError(f"Failed to post to {url} (Status: {response.status})")
+            html_content = await response.text()
+            return HTMLParser(html_content)
+        except ResourceNotFoundError:
+            raise
+        except Exception as e:
+            raise NetworkError(f"Network error posting to {url}: {e}") from e
+
     def _parse_text(self, node: Node, selector: str, default: str | None = None) -> str | None:
         """Safely extract text from a selector."""
         element = node.css_first(selector)

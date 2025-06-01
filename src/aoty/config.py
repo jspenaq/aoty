@@ -4,4 +4,4 @@ import os
 AOTY_BASE_URL = "https://www.albumoftheyear.org"
 
 # # Request timeout in seconds
-REQUEST_TIMEOUT_SECONDS = int(os.getenv("AOTY_REQUEST_TIMEOUT_SECONDS", 10))
+REQUEST_TIMEOUT_SECONDS = int(os.getenv("AOTY_REQUEST_TIMEOUT_SECONDS", 30))

@@ -21,7 +21,9 @@ async def test_get_html_success(base_scraper):
     mock_response = MagicMock()
     mock_response.ok = True
     mock_response.status = 200
-    mock_response.text = AsyncMock(return_value="<html><body><h1>Test</h1></body></html>")
+    mock_response.text = AsyncMock(
+        return_value="<html><body><h1>Test</h1></body></html>"
+    )
     base_scraper._client.get.return_value = mock_response
 
     html_parser = await base_scraper._get_html("http://example.com")
@@ -42,7 +44,9 @@ async def test_get_html_404_error(base_scraper):
 
     with pytest.raises(ResourceNotFoundError) as excinfo:
         await base_scraper._get_html("http://example.com/nonexistent")
-    assert "Resource not found at http://example.com/nonexistent (Status: 404)" in str(excinfo.value)
+    assert "Resource not found at http://example.com/nonexistent (Status: 404)" in str(
+        excinfo.value
+    )
 
 
 @pytest.mark.asyncio
@@ -56,7 +60,9 @@ async def test_get_html_other_http_error(base_scraper):
 
     with pytest.raises(NetworkError) as excinfo:
         await base_scraper._get_html("http://example.com/error")
-    assert "Failed to fetch http://example.com/error (Status: 500)" in str(excinfo.value)
+    assert "Failed to fetch http://example.com/error (Status: 500)" in str(
+        excinfo.value
+    )
 
 
 @pytest.mark.asyncio
@@ -66,7 +72,106 @@ async def test_get_html_connection_error(base_scraper):
 
     with pytest.raises(NetworkError) as excinfo:
         await base_scraper._get_html("http://example.com/bad-connection")
-    assert "Network error fetching http://example.com/bad-connection: Failed to connect" in str(excinfo.value)
+    assert (
+        "Network error fetching http://example.com/bad-connection: Failed to connect"
+        in str(excinfo.value)
+    )
+
+import pytest
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "data_type, test_data, expected_data",
+    [
+        (
+            "form_data",
+            {"key": "value"},
+            {"key": "value"},
+        ),
+        (
+            "json_data",
+            {"key": "value"},
+            {"key": "value"},
+        ),
+    ],
+)
+async def test_post_html_success(base_scraper, data_type, test_data, expected_data):
+    """Test successful HTML retrieval via POST with different data types."""
+    mock_response = MagicMock()
+    mock_response.ok = True
+    mock_response.status = 200
+    mock_response.text = AsyncMock(
+        return_value="<html><body><h1>Test</h1></body></html>"
+    )
+    base_scraper._client.post.return_value = mock_response
+
+    test_headers = {"X-Test": "True"}
+
+    if data_type == "form_data":
+        html_parser = await base_scraper._post_html(
+            "http://example.com/post", form_data=test_data, headers=test_headers
+        )
+        expected_call_data = list(test_data.items())
+        expected_arg = "form"
+    elif data_type == "json_data":
+        html_parser = await base_scraper._post_html(
+            "http://example.com/post", json_data=test_data, headers=test_headers
+        )
+        expected_call_data = test_data
+        expected_arg = "json"
+    else:
+        raise ValueError("Invalid data_type")
+
+    assert isinstance(html_parser, HTMLParser)
+    assert html_parser.css_first("h1").text(strip=True) == "Test"
+    base_scraper._client.post.assert_awaited_once_with(
+        "http://example.com/post", headers=test_headers, **{expected_arg: expected_call_data}
+    )
+
+
+@pytest.mark.asyncio
+async def test_post_html_404_error(base_scraper):
+    """Test 404 error handling in _post_html."""
+    mock_response = MagicMock()
+    mock_response.ok = False
+    mock_response.status = 404
+    mock_response.text = AsyncMock(return_value="Not Found")
+    base_scraper._client.post.return_value = mock_response
+
+    with pytest.raises(ResourceNotFoundError) as excinfo:
+        await base_scraper._post_html("http://example.com/nonexistent")
+    assert "Resource not found at http://example.com/nonexistent (Status: 404)" in str(
+        excinfo.value
+    )
+
+
+@pytest.mark.asyncio
+async def test_post_html_other_http_error(base_scraper):
+    """Test other HTTP error handling in _post_html."""
+    mock_response = MagicMock()
+    mock_response.ok = False
+    mock_response.status = 500
+    mock_response.text = AsyncMock(return_value="Internal Server Error")
+    base_scraper._client.post.return_value = mock_response
+
+    with pytest.raises(NetworkError) as excinfo:
+        await base_scraper._post_html("http://example.com/error")
+    assert "Failed to post to http://example.com/error (Status: 500)" in str(
+        excinfo.value
+    )
+
+
+@pytest.mark.asyncio
+async def test_post_html_connection_error(base_scraper):
+    """Test general connection error handling in _post_html."""
+    base_scraper._client.post.side_effect = ConnectionError("Failed to connect")
+
+    with pytest.raises(NetworkError) as excinfo:
+        await base_scraper._post_html("http://example.com/bad-connection")
+    assert (
+        "Network error posting to http://example.com/bad-connection: Failed to connect"
+        in str(excinfo.value)
+    )
 
 
 def test_parse_text_success(base_scraper):
@@ -103,60 +208,72 @@ def test_parse_number_float_from_text_success(base_scraper):
     result = base_scraper._parse_number(html, float, ".score")
     assert result == 9.5
 
+
 def test_parse_number_int_from_text_success(base_scraper):
     html = HTMLParser("<div><span class='count'>123</span></div>")
     result = base_scraper._parse_number(html, int, ".count")
     assert result == 123
+
 
 def test_parse_number_float_from_attribute_success(base_scraper):
     html = HTMLParser("<div data-value='7.8'>10</div>")
     result = base_scraper._parse_number(html, float, "div", attribute="data-value")
     assert result == 7.8
 
+
 def test_parse_number_int_from_attribute_success(base_scraper):
     html = HTMLParser("<div data-id='456'></div>")
     result = base_scraper._parse_number(html, int, "div", attribute="data-id")
     assert result == 456
+
 
 def test_parse_number_direct_node_float_text(base_scraper):
     node = HTMLParser("<span>100.0</span>").css_first("span")
     result = base_scraper._parse_number(node, float)
     assert result == 100.0
 
+
 def test_parse_number_direct_node_int_text(base_scraper):
     node = HTMLParser("<span>789</span>").css_first("span")
     result = base_scraper._parse_number(node, int)
     assert result == 789
+
 
 def test_parse_number_invalid_value_float(base_scraper):
     html = HTMLParser("<div><span class='score'>abc</span></div>")
     result = base_scraper._parse_number(html, float, ".score")
     assert result is None
 
+
 def test_parse_number_invalid_value_int(base_scraper):
     html = HTMLParser("<div><span class='count'>abc</span></div>")
     result = base_scraper._parse_number(html, int, ".count")
     assert result is None
+
 
 def test_parse_number_invalid_value_float_with_default(base_scraper):
     html = HTMLParser("<div><span class='score'>abc</span></div>")
     result = base_scraper._parse_number(html, float, ".score", default=0.0)
     assert result == 0.0
 
+
 def test_parse_number_invalid_value_int_with_default(base_scraper):
     html = HTMLParser("<div><span class='count'>abc</span></div>")
     result = base_scraper._parse_number(html, int, ".count", default=0)
     assert result == 0
+
 
 def test_parse_number_selector_not_found(base_scraper):
     html = HTMLParser("<div></div>")
     result = base_scraper._parse_number(html, float, ".score")
     assert result is None
 
+
 def test_parse_number_attribute_not_found(base_scraper):
     html = HTMLParser("<div><span class='score'>10</span></div>")
     result = base_scraper._parse_number(html, float, ".score", attribute="data-value")
     assert result is None
+
 
 # Existing tests for _parse_float (now calling _parse_number)
 def test_parse_float_from_text_success(base_scraper):
@@ -222,11 +339,13 @@ def test_parse_int_from_text_success(base_scraper):
     result = base_scraper._parse_int(html, ".count")
     assert result == 123
 
+
 def test_parse_int_from_attribute_success(base_scraper):
     """Test successful int parsing from element attribute."""
     html = HTMLParser("<div data-id='456'></div>")
     result = base_scraper._parse_int(html, "div", attribute="data-id")
     assert result == 456
+
 
 def test_parse_int_direct_node_text(base_scraper):
     """Test successful int parsing directly from a node's text."""
@@ -234,11 +353,13 @@ def test_parse_int_direct_node_text(base_scraper):
     result = base_scraper._parse_int(node)
     assert result == 789
 
+
 def test_parse_int_invalid_value(base_scraper):
     """Test int parsing with invalid string value."""
     html = HTMLParser("<div><span class='count'>abc</span></div>")
     result = base_scraper._parse_int(html, ".count")
     assert result is None
+
 
 def test_parse_int_invalid_value_with_default(base_scraper):
     """Test int parsing with invalid string value and default."""
@@ -246,11 +367,13 @@ def test_parse_int_invalid_value_with_default(base_scraper):
     result = base_scraper._parse_int(html, ".count", default=0)
     assert result == 0
 
+
 def test_parse_int_selector_not_found(base_scraper):
     """Test int parsing when selector is not found."""
     html = HTMLParser("<div></div>")
     result = base_scraper._parse_int(html, ".count")
     assert result is None
+
 
 def test_parse_int_attribute_not_found(base_scraper):
     """Test int parsing when attribute is not found."""

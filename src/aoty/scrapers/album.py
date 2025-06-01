@@ -9,9 +9,17 @@ from aoty.exceptions import (
     ParsingError,
     ResourceNotFoundError,
 )
-from aoty.models import Album, AlbumLink, CriticReview, Review, Track, UserRating
+from aoty.models import (
+    Album,
+    AlbumCredit,
+    AlbumLink,
+    CriticReview,
+    Review,
+    Track,
+    UserRating,
+)
 from aoty.scrapers.base import BaseScraper
-from aoty.utils import parse_release_date  # Import parse_release_date
+from aoty.utils import parse_release_date
 
 
 class AlbumScraper(BaseScraper):
@@ -41,10 +49,10 @@ class AlbumScraper(BaseScraper):
                 "release_date": None,
                 "format": None,
                 "labels": [],
-                "producers": [],
-                "writers": [],
-                "credits": None,
-                "total_length": None,  # Added total_length initialization
+                # "producers": [],  # Initialized as empty; not directly populated by this scraper
+                # "writers": [],  # Initialized as empty; not directly populated by this scraper
+                "credits": [],
+                "total_length": None,
             }
 
             # Cover URL
@@ -64,7 +72,10 @@ class AlbumScraper(BaseScraper):
                 'div.albumCriticScore span[itemprop="ratingValue"] a',
             )
             if critic_score_link:
-                album_data["critic_score"] = self._parse_float(critic_score_link, attribute="title")
+                album_data["critic_score"] = self._parse_float(
+                    critic_score_link,
+                    attribute="title",
+                )
 
             album_data["critic_review_count"] = self._parse_float(
                 html,
@@ -72,7 +83,10 @@ class AlbumScraper(BaseScraper):
                 default=None,
             )
 
-            critic_rank_text = self._parse_text(html, "div.albumCriticScoreBox .text.gray")
+            critic_rank_text = self._parse_text(
+                html,
+                "div.albumCriticScoreBox .text.gray",
+            )
             if critic_rank_text:
                 match = re.search(r"#(\d+)\s*/\s*(\d+)", critic_rank_text)
                 if match:
@@ -82,7 +96,10 @@ class AlbumScraper(BaseScraper):
             # User Score
             user_score_link = html.css_first("div.albumUserScore a")
             if user_score_link:
-                album_data["user_score"] = self._parse_float(user_score_link, attribute="title")
+                album_data["user_score"] = self._parse_float(
+                    user_score_link,
+                    attribute="title",
+                )
 
             user_rating_count_text = self._parse_text(
                 html,
@@ -93,7 +110,10 @@ class AlbumScraper(BaseScraper):
                     user_rating_count_text.replace(",", ""),
                 )
 
-            user_rank_text = self._parse_text(html, "div.albumUserScoreBox .text.gray strong a")
+            user_rank_text = self._parse_text(
+                html,
+                "div.albumUserScoreBox .text.gray strong a",
+            )
             if user_rank_text:
                 match = re.search(r"#(\d+)", user_rank_text)
                 if match:
@@ -167,22 +187,7 @@ class AlbumScraper(BaseScraper):
                                 if genre_name and genre_name not in genres:
                                     genres.append(genre_name)
                             album_data["genres"] = genres
-                        elif label_text_normalized == "producer":
-                            album_data["producers"] = [
-                                {
-                                    "name": a.text(strip=True),
-                                    "url": self._build_full_url(a.attributes.get("href")),
-                                }
-                                for a in detail_row.css("a:not(.showAlbumCredits)")
-                            ]
-                        elif label_text_normalized == "writer":
-                            album_data["writers"] = [
-                                {
-                                    "name": a.text(strip=True),
-                                    "url": self._build_full_url(a.attributes.get("href")),
-                                }
-                                for a in detail_row.css("a:not(.showAlbumCredits)")
-                            ]
+                        # Removed producer and writer parsing here
 
             # Tracklist
             tracklist: list[Track] = []
@@ -196,7 +201,9 @@ class AlbumScraper(BaseScraper):
                     track: Track = {
                         "number": self._parse_int(track_number_node),
                         "title": track_title_node.text(strip=True),
-                        "url": self._build_full_url(track_title_node.attributes.get("href")),
+                        "url": self._build_full_url(
+                            track_title_node.attributes.get("href"),
+                        ),
                         "duration": (
                             track_duration_node.text(strip=True) if track_duration_node else None
                         ),
@@ -205,7 +212,9 @@ class AlbumScraper(BaseScraper):
                         "rating_count": None,
                     }
 
-                    featured_artists_nodes = row.css("td.trackTitle div.featuredArtists a")
+                    featured_artists_nodes = row.css(
+                        "td.trackTitle div.featuredArtists a",
+                    )
                     if featured_artists_nodes:
                         track["featured_artists"] = [
                             {
@@ -216,18 +225,36 @@ class AlbumScraper(BaseScraper):
                         ]
 
                     if track_rating_node:
-                        track["rating"] = self._parse_float(track_rating_node, None, default=None)
+                        track["rating"] = self._parse_float(
+                            track_rating_node,
+                            None,
+                            default=None,
+                        )
                         rating_count_title = track_rating_node.attributes.get("title")
                         if rating_count_title:
-                            count_match = re.search(r"(\d+)\s*Ratings", rating_count_title)
+                            count_match = re.search(
+                                r"(\d+)\s*Ratings",
+                                rating_count_title,
+                            )
                             if count_match:
-                                track["rating_count"] = self._parse_int(count_match.group(1))
+                                track["rating_count"] = self._parse_int(
+                                    count_match.group(1),
+                                )
                     tracklist.append(track)
             album_data["tracklist"] = tracklist
 
             total_length_text = self._parse_text(html, "div.totalLength")
             if total_length_text:
-                album_data["total_length"] = total_length_text.replace("Total Length: ", "").strip()
+                album_data["total_length"] = total_length_text.replace(
+                    "Total Length: ",
+                    "",
+                ).strip()
+
+            # Scrape full credits
+            if album_data["id"] is not None:
+                album_data["credits"] = await self._scrape_full_credits(str(album_data["id"]))
+            else:
+                album_data["credits"] = []  # Or None, depending on desired default for missing ID
 
             # Third-party links
             links: list[AlbumLink] = []
@@ -283,7 +310,9 @@ class AlbumScraper(BaseScraper):
                 if username_node and rating_node:
                     user_url_suffix = self._parse_attribute(username_node, None, "href")
                     if user_url_suffix is None:
-                        raise ParsingError("Missing user URL suffix in popular user review block.")
+                        raise ParsingError(
+                            "Missing user URL suffix in popular user review block.",
+                        )
                     review: Review = {
                         "username": username_node.text(strip=True),
                         "user_url": self._build_full_url(user_url_suffix),
@@ -318,7 +347,9 @@ class AlbumScraper(BaseScraper):
                 if username_node and rating_node:
                     user_url_suffix = self._parse_attribute(username_node, None, "href")
                     if user_url_suffix is None:
-                        raise ParsingError("Missing user URL suffix in recent user review block.")
+                        raise ParsingError(
+                            "Missing user URL suffix in recent user review block.",
+                        )
                     review: Review = {
                         "username": username_node.text(strip=True),
                         "user_url": self._build_full_url(user_url_suffix),
@@ -341,7 +372,9 @@ class AlbumScraper(BaseScraper):
 
             # Similar Albums
             similar_albums_list = []
-            for album_block in html.css('div.section:has(h2 a[href*="similar"]) .albumBlock.small'):
+            for album_block in html.css(
+                'div.section:has(h2 a[href*="similar"]) .albumBlock.small',
+            ):
                 title_node = album_block.css_first("a div.albumTitle")
                 artist_node = album_block.css_first("a div.artistTitle")
                 link_node = album_block.css_first("a")
@@ -350,14 +383,18 @@ class AlbumScraper(BaseScraper):
                         {
                             "title": title_node.text(strip=True),
                             "artist": artist_node.text(strip=True),
-                            "url": self._build_full_url(link_node.attributes.get("href")),
+                            "url": self._build_full_url(
+                                link_node.attributes.get("href"),
+                            ),
                         },
                     )
             album_data["similar_albums"] = similar_albums_list
 
             # More by Artist
             more_by_artist_list = []
-            for album_block in html.css('div.section:has(h2 a[href*="artist"]) .albumBlock.small'):
+            for album_block in html.css(
+                'div.section:has(h2 a[href*="artist"]) .albumBlock.small',
+            ):
                 title_node = album_block.css_first("a div.albumTitle")
                 year_node = album_block.css_first("div.type")
                 link_node = album_block.css_first("a")
@@ -370,26 +407,83 @@ class AlbumScraper(BaseScraper):
                                 if year_node and year_node.text(strip=True).isdigit()
                                 else None
                             ),
-                            "url": self._build_full_url(link_node.attributes.get("href")),
+                            "url": self._build_full_url(
+                                link_node.attributes.get("href"),
+                            ),
                         },
                     )
             album_data["more_by_artist"] = more_by_artist_list
 
-            # Contributions By
-            contributions_by_list = []
-            for contributor_node in html.css("div#contributions a"):
-                contributions_by_list.append(
-                    {
-                        "name": contributor_node.text(strip=True),
-                        "url": self._build_full_url(contributor_node.attributes.get("href")),
-                    },
-                )
-            album_data["contributions_by"] = contributions_by_list
+            # Removed Contributions By parsing here
 
             return album_data
 
         except Exception as e:
             raise ParsingError(f"Failed to parse album data from {url}: {e}") from e
+
+    async def _scrape_full_credits(self, album_id: str) -> list[AlbumCredit]:
+        """Scrapes full album credits from the dedicated endpoint."""
+        credits_url = f"{AOTY_BASE_URL}/scripts/showAlbumCredits.php"
+        payload = {"albumID": album_id}
+
+        try:
+            # Use the refactored _post_html method to send form data
+            credits_html = await self._post_html(
+                credits_url,
+                form_data=payload,
+            )
+
+        except NetworkError as e:
+            raise ParsingError(
+                f"Failed to fetch full credits for album ID {album_id}: {e}",
+            ) from e
+        except Exception as e:
+            raise ParsingError(
+                f"Error fetching or parsing full credits for album ID {album_id}: {e}",
+            ) from e
+
+        all_credits: list[AlbumCredit] = []
+        # The response HTML contains multiple 'div.content' blocks, each with 'div.heading' and 'div.inner'.
+        # We need to parse each 'div.content' block.
+        for content_block in credits_html.css("div.content"):
+            # Each content block might contain multiple sections (e.g., Performers, Composition, Production)
+            for section_node in content_block.css("div.inner"):
+                section_title_nodes = section_node.css("div.sectionTitle")
+                credit_wrapper_nodes = section_node.css("div.creditWrapper")
+
+                # Iterate through section titles and their corresponding credit wrappers
+                for i in range(len(section_title_nodes)):
+                    section_title = section_title_nodes[i].text(strip=True)
+                    credit_wrapper = credit_wrapper_nodes[i]
+
+                    for credit_node in credit_wrapper.css("div.credit"):
+                        name_node = credit_node.css_first("div.name a")
+                        songs_node = credit_node.css_first("div.songs")
+
+                        if name_node:
+                            name = name_node.text(strip=True)
+                            url = self._build_full_url(name_node.attributes.get("href"))
+                            roles: list[str] = []
+
+                            if songs_node:
+                                for role_node in songs_node.css("a"):
+                                    role_text = role_node.text(strip=True)
+                                    if (
+                                        role_text and role_text != "Primary"
+                                    ):  # "Primary" is often redundant
+                                        roles.append(role_text)
+
+                            if not roles:
+                                # If no specific roles are found, use the section title as the role
+                                all_credits.append(
+                                    AlbumCredit(name=name, url=url, role=section_title),
+                                )
+                            else:
+                                for role in roles:
+                                    all_credits.append(
+                                        AlbumCredit(name=name, url=url, role=role),
+                                    )
+        return all_credits
 
     async def scrape_user_reviews_ratings(self, album_id: str) -> list[UserRating]:
         """Scrapes all user ratings (without review text) for a given album ID across all pages.
@@ -425,7 +519,10 @@ class AlbumScraper(BaseScraper):
 
         try:
             # Extract total number of reviews to calculate total pages
-            total_reviews_text = self._parse_text(first_page_html, "div.userReviewCounter")
+            total_reviews_text = self._parse_text(
+                first_page_html,
+                "div.userReviewCounter",
+            )
             total_reviews = 0
             if total_reviews_text:
                 match = re.search(r"of (\d+) user reviews", total_reviews_text)
@@ -445,7 +542,9 @@ class AlbumScraper(BaseScraper):
                 if username_node and rating_node and date_node:
                     user_url_suffix = self._parse_attribute(username_node, None, "href")
                     if user_url_suffix is None:  # Explicitly check for missing href
-                        raise ParsingError("Missing user URL suffix in user rating block.")
+                        raise ParsingError(
+                            "Missing user URL suffix in user rating block.",
+                        )
                     rating_data: UserRating = {
                         "username": self._parse_attribute(username_node, None, "title"),
                         "user_url": self._build_full_url(user_url_suffix),
@@ -468,15 +567,27 @@ class AlbumScraper(BaseScraper):
                 for html in additional_html_pages:
                     for rating_block in html.css("div.userRatingBlock"):
                         username_node = rating_block.css_first("div.userName a")
-                        rating_node = rating_block.css_first("div.ratingBlock div.rating")
+                        rating_node = rating_block.css_first(
+                            "div.ratingBlock div.rating",
+                        )
                         date_node = rating_block.css_first("div.date")
 
                         if username_node and rating_node and date_node:
-                            user_url_suffix = self._parse_attribute(username_node, None, "href")
+                            user_url_suffix = self._parse_attribute(
+                                username_node,
+                                None,
+                                "href",
+                            )
                             if user_url_suffix is None:  # Explicitly check for missing href
-                                raise ParsingError("Missing user URL suffix in user rating block.")
+                                raise ParsingError(
+                                    "Missing user URL suffix in user rating block.",
+                                )
                             rating_data: UserRating = {
-                                "username": self._parse_attribute(username_node, None, "title"),
+                                "username": self._parse_attribute(
+                                    username_node,
+                                    None,
+                                    "title",
+                                ),
                                 "user_url": self._build_full_url(user_url_suffix),
                                 "rating": self._parse_float(rating_node),
                                 "date": self._parse_attribute(date_node, None, "title"),
@@ -484,19 +595,6 @@ class AlbumScraper(BaseScraper):
                             all_user_ratings.append(rating_data)
             return all_user_ratings
         except Exception as e:
-            raise ParsingError(f"Failed to parse user ratings from album ID {album_id}: {e}") from e
-
-
-async def main():
-    # Build a client
-    a = AlbumScraper()
-    data = await a.scrape_album_by_id("569129-rm-indigo")
-
-    # Use the API you're already familiar with
-    # resp = await client.get("https://tls.peet.ws/api/all")
-
-    print(data)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+            raise ParsingError(
+                f"Failed to parse user ratings from album ID {album_id}: {e}",
+            ) from e
