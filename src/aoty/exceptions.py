@@ -17,6 +17,16 @@ class AlbumNotFoundError(AOTYError):
     pass
 
 
+class ArtistNotFoundError(AOTYError):
+    """Raised when an artist is not found (e.g., 404).
+
+    This exception indicates that the requested artist could not be
+    found on the website. This might be due to an invalid URL or
+    the artist being removed from the site.
+    """
+    pass
+
+
 class ParsingError(AOTYError):
     """Raised when there is an error parsing HTML content.
 
