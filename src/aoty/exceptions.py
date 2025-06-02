@@ -4,6 +4,7 @@ class AOTYError(Exception):
     This exception should be inherited by all custom exceptions
     in the AOTY scraper.
     """
+
     pass
 
 
@@ -14,6 +15,7 @@ class AlbumNotFoundError(AOTYError):
     found on the website. This might be due to an invalid URL or
     the album being removed from the site.
     """
+
     pass
 
 
@@ -24,6 +26,7 @@ class ArtistNotFoundError(AOTYError):
     found on the website. This might be due to an invalid URL or
     the artist being removed from the site.
     """
+
     pass
 
 
@@ -35,6 +38,7 @@ class ParsingError(AOTYError):
     This could be due to changes in the website's layout or
     incorrect parsing logic.
     """
+
     pass
 
 
@@ -45,6 +49,7 @@ class ResourceNotFoundError(AOTYError):
     or a webpage, could not be found. This is often due to a broken
     link or the resource being removed from the server.
     """
+
     pass
 
 
@@ -56,4 +61,5 @@ class NetworkError(AOTYError):
     (other than 200 OK). This could be due to network outages, server
     errors, or incorrect URLs.
     """
+
     pass

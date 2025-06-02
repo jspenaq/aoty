@@ -1,4 +1,3 @@
-import os
 
 # Base URL for the Album of the Year website
 AOTY_BASE_URL = "https://www.albumoftheyear.org"
