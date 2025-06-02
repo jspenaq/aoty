@@ -115,14 +115,59 @@ class Album(TypedDict):
     id: int | None  # Can be derived from URL
 
 
+class ArtistSummary(TypedDict):
+    """Represents a summary of an artist, typically used in lists."""
+
+    name: str
+    url: str
+    image_url: str | None
+
+
+class AlbumSummary(TypedDict, total=False):
+    """Represents a summary of an album, typically used in lists on artist pages."""
+
+    title: str
+    artist: (
+        str | None
+    )  # The primary artist of this specific album, if different from the main artist page (e.g., for "Appears On")
+    url: str
+    year: int | None
+    type: str | None  # e.g., "LP", "Mixtape", "Single"
+    cover_url: str | None
+    critic_score: float | None
+    critic_review_count: int | None
+    user_score: float | None
+    user_rating_count: int | None
+
+
+class SongSummary(TypedDict, total=False):
+    """Represents a summary of a song, typically used in lists on artist pages."""
+
+    title: str
+    url: str
+    album_title: str | None
+    album_url: str | None
+    cover_url: str | None
+    rating: float | None
+    rating_count: int | None
+
+
 class Artist(TypedDict):
     """Represents an artist."""
 
     name: str
-    genres: list[str]
-    associated_albums: list[dict[str, str]]  # List of {"title": "...", "url": "..."}
     url: str
     id: int | None  # Can be derived from URL
+    cover_url: str | None
+    critic_score: float | None
+    critic_review_count: int | None
+    user_score: float | None
+    user_rating_count: int | None
+    genres: list[str]
+    associated_artists: list[ArtistSummary] | None  # e.g., "Member Of"
+    discography: list[AlbumSummary] | None
+    top_songs: list[SongSummary] | None
+    similar_artists: list[ArtistSummary] | None
 
 
 class NewsArticle(TypedDict):
